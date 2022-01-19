@@ -50,9 +50,9 @@ int main(void)
 	/* Set base stream to USB-serial */
 	BaseSequentialStream * chp = (BaseSequentialStream *)&SDU1;
 
+	int i = 0;
 	while (true) 
 	{
-		int i = 0;
 		uint8_t buf = 0;
 		chprintf(chp,"workling : %d \n\r", i++);
 		streamRead(chp, &buf, 1); 

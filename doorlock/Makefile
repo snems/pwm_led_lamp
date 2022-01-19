@@ -90,7 +90,7 @@ MCU  = cortex-m3
 
 # Imported source files and paths.
 CHIBIOS  := ../ChibiOS
-CHIBIOS_board  := ../board/bluepill
+CHIBIOS_board  := ../boards/BLUEPILL
 CONFDIR  := ./cfg
 BUILDDIR := ./build
 DEPDIR   := ./.dep
