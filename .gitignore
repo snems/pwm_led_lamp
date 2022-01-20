@@ -1,0 +1,3 @@
+boards/BLUEPILL/board.h
+boards/BLUEPILL/board.c
+boards/BLUEPILL/board.mk

@@ -1,3 +1,9 @@
 #!/bin/bash
-#docker run -it --rm --net=host --env="DISPLAY" --volume="$PWD/../:/home/username:rw" snems/stm32_builder
-docker run -it --rm --net=host --volume="$PWD:/home/username/build:rw" snems/stm32_builder bash /home/username/build/docker/build_script
+
+function docker_script_run 
+{
+	docker run -it --rm --net=host --volume="$PWD:/home/username/build:rw" snems/stm32_builder bash $1
+}
+
+docker_script_run /home/username/build/docker/script_generate_board
+docker_script_run /home/username/build/docker/script_build

@@ -1,0 +1,2 @@
+cd /home/username/build/boards/BLUEPILL
+fmpp -q -C cfg/board.fmpp

@@ -97,14 +97,12 @@ DEPDIR   := ./.dep
 
 # Licensing files.
 include $(CHIBIOS)/os/license/license.mk
-# Common files.                                                                  
-include $(CHIBIOS)/os/common/utils/utils.mk       
 # Startup files.
 include $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC/mk/startup_stm32f1xx.mk
 # HAL-OSAL files (optional).
 include $(CHIBIOS)/os/hal/hal.mk
 include $(CHIBIOS)/os/hal/ports/STM32/STM32F1xx/platform.mk
-include $(CHIBIOS_board)/board.mk
+include $(CHIBIOS)/os/hal/boards/MAPLEMINI_STM32_F103/board.mk
 include $(CHIBIOS)/os/hal/osal/rt-nil/osal.mk
 # RTOS files (optional).
 include $(CHIBIOS)/os/rt/rt.mk
