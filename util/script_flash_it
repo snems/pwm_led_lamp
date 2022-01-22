@@ -1,0 +1,1 @@
+/usr/bin/st-flash write /home/username/build/doorlock/build/ch.bin 0x08000000
