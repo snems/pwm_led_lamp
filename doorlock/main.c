@@ -3,7 +3,6 @@
 #include "usbcfg.h"
 #include "chprintf.h"
 
-#define LED_PIN			13u
 
 /*
  * Blinker thread.
@@ -14,12 +13,12 @@ static THD_FUNCTION(led_thread, arg)
 	(void)arg;
 
 	chRegSetThreadName("blinker");
-	palSetPadMode(GPIOC, LED_PIN, PAL_MODE_OUTPUT_PUSHPULL);
+	palSetPadMode(GPIOC, GPIOC_BOARD_LED, PAL_MODE_OUTPUT_PUSHPULL);
 	while (true) 
 	{
-		palSetPad(GPIOC, 13U);
+		palSetPad(GPIOC, GPIOC_BOARD_LED);
 		chThdSleepMilliseconds(950);
-		palClearPad(GPIOC, 13U);
+		palClearPad(GPIOC, GPIOC_BOARD_LED);
 		chThdSleepMilliseconds(50);
 	}
 }
@@ -29,7 +28,7 @@ int main(void)
 	halInit();     /* Initialize hardware. */
 	chSysInit();   /* Initialize OS. */
 
-	/* Initialize and start serial ove USB dirver. */
+	/* Initialize and start serial over USB dirver. */
 	sduObjectInit(&SDU1);
 	sduStart(&SDU1, &serusbcfg);
 
@@ -50,7 +49,7 @@ int main(void)
 	/* Set base stream to USB-serial */
 	BaseSequentialStream * chp = (BaseSequentialStream *)&SDU1;
 
-	int i = 0;
+	int i = 1;
 	while (true) 
 	{
 		uint8_t buf = 0;
