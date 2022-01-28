@@ -123,8 +123,10 @@ LDSCRIPT= $(STARTUPLD)/STM32F103xB.ld
 # setting.
 CSRC = $(ALLCSRC) \
        $(TESTSRC) \
+	   $(CHIBIOS)/os/various/syscalls.c \
        src/main.c \
-       src/usbcfg.c
+       src/usbcfg.c \
+       src/ir.c 
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
