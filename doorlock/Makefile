@@ -121,12 +121,13 @@ LDSCRIPT= $(STARTUPLD)/STM32F103xB.ld
 
 # C sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.
-CSRC = $(ALLCSRC) \
-       $(TESTSRC) \
-	   $(CHIBIOS)/os/various/syscalls.c \
-       src/main.c \
+CSRC = $(ALLCSRC)   \
+       $(TESTSRC)   \
+       $(CHIBIOS)/os/various/syscalls.c \
+       src/main.c   \
        src/usbcfg.c \
-       src/ir.c 
+       src/ir.c     \
+       src/pwm.c
 
 # C++ sources that can be compiled in ARM or THUMB mode depending on the global
 # setting.

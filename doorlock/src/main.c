@@ -4,6 +4,8 @@
 #include "usbcfg.h"
 #include "chprintf.h"
 #include "ir.h"
+#include "pwm.h"
+#include "config.h"
 
 struct context
 {
@@ -27,6 +29,18 @@ static void remote_command(void *context, uint16_t address, uint8_t command, boo
 }
 
 
+static void pwm_callback(void *context, bool rising)
+{
+	(void)context;
+	if (rising)
+	{
+		palSetPad(PWM_PORT, PWM_PIN);
+	}
+	else
+	{
+		palClearPad(PWM_PORT, PWM_PIN);
+	}
+}
 
 /*
  * Blinker thread.
@@ -53,7 +67,7 @@ int main(void)
 	chSysInit();   /* Initialize OS. */
 
 
-	/* Initialize and start serial over USB dirver. */
+	/* Initialize and start serial over USB driver. */
 	sduObjectInit(&SDU1);
 	sduStart(&SDU1, &serusbcfg);
 
@@ -79,17 +93,29 @@ int main(void)
 	ir_initialize();
 	ir_set_callback(remote_command, &context);
 
+	/* Initialize PWM controller. */
+	pwm_initialize();
+	pwm_set_callback(pwm_callback, &context);
+	palSetPadMode(PWM_PORT, PWM_PIN, PAL_MODE_OUTPUT_PUSHPULL);
+	pwm_set(5000);
 
 
-	chprintf(context.chp,"start\n\r");
 
 	while (true)
 	{
-		if (context.was_command && context.cmd_repeat)
+		if (context.was_command)
 		{
 			chprintf(context.chp,"address 0x%04X, command 0x%02X, repeat %d\n\r", context.cmd_address, context.cmd_command, context.cmd_repeat);
 			context.was_command = false;
 			context.cmd_repeat = 0;
+			if (context.cmd_command == 6)
+			{
+				pwm_set(100);
+			}
+			else if (context.cmd_command == 7)
+			{
+				pwm_set(10000);
+			}
 		}
 		chThdSleepMilliseconds(500);
 	}
