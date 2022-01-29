@@ -2,9 +2,21 @@
 #include "ir.h"
 #include "config.h"
 
-#define IR_NUMBER_OF_BITS_PER_COMMAND   96
-#define IR_BITMAP_RECEIVED_SIZE         12
-#define IR_MEASURES_PER_BIT   3u   /** Measures per bit, depends on tick time. Maximum 32. */
+#if !defined(IR_PORT) || !defined(IR_PIN)
+#error Infrared receiver pin is not configured!
+#endif
+
+#ifndef IR_PIN_INVERTED
+#error Polarity of signal from infrared receiver is not configured!
+#endif
+
+#if STM32_GPT_USE_TIM1 != TRUE
+#error Infrared receiver requires TIM1.
+#endif
+
+#define IR_NUMBER_OF_BITS_PER_COMMAND   96      /** Number of measurements per command, not including synchronization. */
+#define IR_BITMAP_RECEIVED_SIZE         12      /** Number of bytes for bitmap. */
+#define IR_MEASURES_PER_BIT   3u                /** Measures per bit, depends on tick time. Maximum 32. */
 
 #define IR_REPEAT_TIMEOUT                                       120u /** How long we will waiting for repeat. */
 #define IR_TIMER_10_MSEC                                      40000u /** 10 milliseconds. */
@@ -18,7 +30,6 @@
 #define IR_REPEAT_LEADING_PULSE_MIN_TICKS                     32000u /** Minimum timer ticks of first part of repeating. */
 #define IR_REPEAT_SPACE_LEADING_SPACE_MAX_TICKS               10000u /** Maximum timer ticks of second part of repeating. */
 #define IR_REPEAT_SPACE_LEADING_SPACE_MIN_TICKS                8000u /** Minimum timer ticks of second part of repeating. */
-
 
 
 static struct
@@ -38,7 +49,7 @@ static struct
 	{
 		uint32_t              ticks_measurement_shift;        /** Time from signal change to measurement. */
 		uint32_t              ticks_per_measurement;          /** Tick from one measurement to next one. */
-		volatile bool         rearm_timer;                    /** Flag means that measurements synchronizing with signal change. */
+		bool                  rearm_timer;                    /** Flag means that measurements synchronizing with signal change. */
 		uint8_t               bits_received;                  /** Number of received bits. */
 		uint8_t               bit_measure_num;                /** Current number of measure, per bit. */
 		uint32_t              bit_measures;                   /** Measures per bit. */
@@ -61,7 +72,7 @@ static struct
 	enum
 	{
 		IR_STATE_SYNCHRONIZATION = 0,      /** Wait for start. */
-		IR_STATE_RECEIVING_COMMAND,        /** Command receiving in progress. */
+		IR_STATE_RECEIVE_COMMAND,          /** Command receiving in progress. */
 		IR_STATE_WAIT_REPEAT,              /** Waiting for repeat command. */
 	}state;
 
@@ -69,12 +80,7 @@ static struct
 }ir_context;
 
 
-static void ir_pad_interrupt (void*context);
-static void ir_timer_callback(GPTDriver *gptp);
-static void ir_synchronize_receiving (void);
-static void ir_receive_command(void);
-
-static bool ir_bit_value_get(uint8_t bit_number)
+static bool ir_bitmap_value_get(uint8_t bit_number)
 {
 	if (bit_number >= IR_NUMBER_OF_BITS_PER_COMMAND)
 	{
@@ -83,7 +89,7 @@ static bool ir_bit_value_get(uint8_t bit_number)
 	return (ir_context.decoder.received_bits[bit_number / 8] & (1 << (bit_number % 8))) != 0;
 }
 
-static void ir_bit_value_set(uint8_t bit_number, bool bit_value)
+static void ir_bitmap_value_set(uint8_t bit_number, bool bit_value)
 {
 	if (bit_value)
 	{
@@ -97,15 +103,15 @@ static void ir_bit_value_set(uint8_t bit_number, bool bit_value)
 
 static bool ir_bit_decode(uint8_t from_bit_number, bool *value)
 {
-	const bool bit_1 = ir_bit_value_get(from_bit_number);
-	const bool bit_2 = ir_bit_value_get(from_bit_number + 1);
+	const bool bit_1 = ir_bitmap_value_get(from_bit_number);
+	const bool bit_2 = ir_bitmap_value_get(from_bit_number + 1);
 	if (!bit_1 || bit_2)
 	{
 		/* Bit 1 must be "1" and bit 2 must be "0". */
 		return false;
 	}
 
-	const bool bit_3 = ir_bit_value_get( from_bit_number + 2);
+	const bool bit_3 = ir_bitmap_value_get(from_bit_number + 2);
 	if (bit_3)
 	{
 		/* if bit 3 is "1" - it is next value and our value is logic zero. */
@@ -113,7 +119,7 @@ static bool ir_bit_decode(uint8_t from_bit_number, bool *value)
 		return true;
 	}
 	/* if bit 3 and 4 is "0" - our value is logic one. */
-	const bool bit_4 = ir_bit_value_get(from_bit_number + 3);
+	const bool bit_4 = ir_bitmap_value_get(from_bit_number + 3);
 	if (bit_4)
 	{
 		return false;
@@ -206,12 +212,19 @@ static void ir_decode_command(void)
 
 static void ir_push_signal_value(bool value, uint8_t bit_number)
 {
-	ir_bit_value_set(bit_number, value);
+	ir_bitmap_value_set(bit_number, value);
 	if (bit_number == IR_NUMBER_OF_BITS_PER_COMMAND - 1)
 	{
 		/* Last bit received. */
 		ir_decode_command();
 	}
+}
+
+static void ir_synchronize_receiving (void)
+{
+	gptStopTimerI(ir_context.gpt);
+	gptStartOneShotI(ir_context.gpt, ir_context.measurements.ticks_measurement_shift);
+	ir_context.measurements.rearm_timer = true;
 }
 
 static bool ir_pad_value(void)
@@ -282,7 +295,7 @@ static void ir_synchronization(void)
 				if (space_time > IR_SYNC_SPACE_LEADING_SPACE_MIN_TICKS)
 				{
 					ir_context.sync_state = IR_SYNC_DONE;
-					ir_context.state = IR_STATE_RECEIVING_COMMAND;
+					ir_context.state = IR_STATE_RECEIVE_COMMAND;
 					ir_synchronize_receiving();
 				}
 				else
@@ -294,13 +307,6 @@ static void ir_synchronization(void)
 		case IR_SYNC_DONE:
 			return;
 	}
-}
-
-static void ir_synchronize_receiving (void)
-{
-	gptStopTimerI(ir_context.gpt);
-	gptStartOneShotI(ir_context.gpt, ir_context.measurements.ticks_measurement_shift);
-	ir_context.measurements.rearm_timer = true;
 }
 
 static void ir_receiving(void)
@@ -385,7 +391,7 @@ static void ir_pad_interrupt (void*context)
 		case IR_STATE_SYNCHRONIZATION:
 			ir_synchronization();
 			break;
-		case IR_STATE_RECEIVING_COMMAND:
+		case IR_STATE_RECEIVE_COMMAND:
 			if (ir_pad_value())
 			{
 				ir_synchronize_receiving();
@@ -444,7 +450,7 @@ static void ir_timer_callback(GPTDriver *gptp)
 	{
 		case IR_STATE_SYNCHRONIZATION:
 			break;
-		case IR_STATE_RECEIVING_COMMAND:
+		case IR_STATE_RECEIVE_COMMAND:
 			if (ir_context.measurements.bits_received == IR_NUMBER_OF_BITS_PER_COMMAND)
 			{
 				if (!ir_context.decoder.command_received)
